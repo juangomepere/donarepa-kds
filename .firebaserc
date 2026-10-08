@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "donarepa-kds-demo"
+    "default": "donarepa-kds-demo",
+    "prod": "donarepa-kds"
   }
 }
