@@ -239,11 +239,9 @@ export default function PosSim() {
             )}
           </div>
 
-          {import.meta.env.DEV && (
-            <button onClick={runSim} className="mt-3 w-full rounded border border-dashed border-gray-400 py-2 text-sm">
-              Simular 10 pedidos (dev)
-            </button>
-          )}
+          <button onClick={runSim} className="mt-3 w-full rounded border border-dashed border-gray-400 py-2 text-sm">
+            Simular 10 pedidos
+          </button>
         </section>
 
         {/* Ventas del día */}
