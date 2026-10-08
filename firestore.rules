@@ -1,0 +1,51 @@
+rules_version = '2';
+
+// Reglas pragmáticas acordes a "quién escribe qué" (CLAUDE.md).
+// Pendiente: suite con @firebase/rules-unit-testing.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function role() {
+      return get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role;
+    }
+    function signedIn() { return request.auth != null; }
+    function hasRole(r) { return signedIn() && role() == r; }
+
+    // Vistas públicas (QR). Lectura abierta; escritura solo POS/KDS autenticados.
+    match /public/{token} {
+      allow read: if true;
+      allow write: if hasRole('pos') || hasRole('kds');
+    }
+
+    match /orders/{saleId} {
+      allow read: if signedIn();
+      allow create: if hasRole('pos');
+      allow update: if hasRole('pos') || hasRole('kds');
+      allow delete: if false;
+    }
+
+    match /dish_stats/{dishId} {
+      allow read: if signedIn();
+      allow write: if hasRole('kds') || hasRole('admin');
+    }
+
+    match /config/{doc=**} {
+      allow read: if signedIn();
+      allow write: if hasRole('admin') || hasRole('gerente');
+    }
+
+    match /heartbeats/{id} {
+      allow read: if signedIn();
+      allow write: if hasRole('kds');
+    }
+
+    match /incidents/{id} {
+      allow read: if signedIn();
+      allow write: if signedIn();
+    }
+
+    match /staff/{uid} {
+      allow read: if signedIn();
+      allow write: if hasRole('admin');
+    }
+  }
+}
