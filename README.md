@@ -102,3 +102,35 @@ Despliegue (Railway + Firebase en la nube): ver [`DEPLOY.md`](./DEPLOY.md).
   prueba (aún no hay pantalla `/login`). Las credenciales son de demo, no de producción real.
 - Estructura del código y modelo de datos documentados en [`CLAUDE.md`](./CLAUDE.md).
 - Pendiente por diseño: pantallas reales de `/login` y `/admin`.
+
+---
+
+## Limitaciones técnicas y recomendaciones de mantenimiento
+
+### Limitaciones conocidas
+
+| Área | Limitación |
+|------|-----------|
+| **Cuota Firebase Spark** | 50 k lecturas / 20 k escrituras por día. Con ~120 pedidos/día hay margen, pero picos de demanda o bugs de escritura pueden agotarla. El heartbeat del KDS consume ~1 920 escrituras/día (cada 15 s × 8 h). |
+| **Sin Cloud Functions** | Toda la lógica corre en cliente. No hay tareas programadas: el cierre de turno, la expiración de tokens y el recálculo de estadísticas son responsabilidad de las pantallas abiertas en ese momento. |
+| **ETA FIFO simple** | El motor asume una sola cocina con `c` puestos idénticos. No modela estaciones separadas (plancha/freidora), variaciones de personal ni dependencias entre platos. |
+| **Una sola cola** | No hay soporte para múltiples estaciones de cocina ni múltiples cajas simultáneas. |
+| **Ordenación en cliente** | Para evitar índices compuestos en Spark, los pedidos se ordenan en memoria. Cada cliente descarga todos los pedidos activos; con colas muy largas aumenta el tráfico. |
+| **Ventana de aprendizaje de platos** | `dish_stats` guarda las últimas 20 muestras. Platos nuevos o de bajo volumen usan `defaultPrepMin` hasta alcanzar `minSamples` (5 por defecto). |
+| **Contingencia por instancia** | El modo contingencia de `posBridge` es estado local en memoria; si se recarga la página o hay varias terminales POS, cada instancia gestiona su propio modo. |
+| **Expiración de QR en 2 horas** | El enlace `/t/:token` expira 2 h después de creado. Pedidos que tarden más (ej. cierre de turno tardío) mostrarán "Pedido finalizado". |
+| **Login automático en demo** | `/pos-sim` y `/kds` inician sesión con cuentas de prueba; no existe pantalla `/login` ni `/admin` todavía. |
+
+### Recomendaciones de mantenimiento
+
+1. **Primera semana de operación real:** revisar en Firebase Console el consumo de cuota diario; ajustar parámetros de `config/main` (`c`, `defaultPrepMin`, `noStartGraceMin`) según el comportamiento real de la cocina.
+
+2. **Si el volumen crece:** migrar a plan Blaze (pago por uso) para habilitar Cloud Functions y exportaciones automáticas de Firestore. Esto permite mover la validación de ETA al servidor y programar tareas de limpieza nocturna.
+
+3. **Antes de producción real:** reemplazar el login automático por las pantallas `/login` y `/admin`; rotar las credenciales de demo; revisar las reglas de Firestore (`firestore.rules`) para el contexto de personal real.
+
+4. **Sembrar `dish_stats` inicialmente:** ejecutar `npm run seed` con tiempos reales de preparación para que el motor de ETA no arranque todo en `defaultPrepMin` durante los primeros turnos.
+
+5. **Monitorear la alerta de KDS inactivo:** si `watchKdsHealth` reporta `kds_inactivo` con frecuencia, verificar la conexión de red de la tablet de cocina o aumentar el umbral `STALE_MS` en `posBridge.ts`.
+
+6. **Revisar `dish_stats` tras cambios de menú:** cuando se agrega un plato nuevo o cambia su receta, sus 20 muestras anteriores pueden quedar obsoletas; limpiarlas desde `/admin` o directamente en Firestore.
